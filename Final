@@ -1,0 +1,182 @@
+import pandas_datareader as wb
+import pandas as pd
+from datetime import datetime
+import yfinance as yf
+import matplotlib.pyplot as plt
+from datetime import datetime
+import seaborn as sns
+from sklearn.linear_model import LinearRegression
+
+
+
+
+# step 1: collection for election year and non-election year data
+currency_pair = ["CHF=X","EUR=X","GBP=X","RUB=X","JPY=X"]
+start_date = datetime(2004,1,1)
+end_date = datetime.today()
+
+
+#election year data
+election_years = [2020, 2016, 2012, 2008, 2004]
+election_seasons = [(datetime(year - 1, 11, 1), datetime(year, 11, 1)) for year in election_years]
+
+
+exchange_data_during_elections = {}
+for pair in currency_pair:
+    ticker = yf.Ticker(pair)
+    for start, end in election_seasons:
+        df = ticker.history(start=start, end=end, progress=False)
+        if pair in exchange_data_during_elections:
+            exchange_data_during_elections[pair] = pd.concat([exchange_data_during_elections[pair], df["Close"]])
+        else:
+            exchange_data_during_elections[pair] = df["Close"]
+
+
+exchange_df_election_yrs = pd.DataFrame(exchange_data_during_elections)
+exchange_df_election_yrs.reset_index(inplace=True)
+exchange_df_election_yrs["Date"] = exchange_df_election_yrs["Date"].dt.tz_localize(None)
+
+
+
+
+#print(exchange_df_election_yrs)
+
+
+#non election year data
+exchange_data = {}
+for pair in currency_pair:
+    ticker = yf.Ticker(pair)
+    df = ticker.history(start=start_date, end=end_date, progress=False)
+    exchange_data[pair] = df["Close"]
+
+
+# exchange_data = yf.download(currency_pair, start=start_date, end=end_date)["Adj Close"]
+exchange_df_non_election_yrs = pd.DataFrame(exchange_data)
+exchange_df_non_election_yrs.reset_index(inplace=True)
+
+
+
+
+exchange_df_non_election_yrs["Date"] = exchange_df_non_election_yrs["Date"].dt.tz_localize(None)
+
+
+
+
+#print(exchange_df.head(5))
+
+
+
+
+
+
+
+
+#step 2 analysis and visualization
+plt.figure(figsize=(12,6))
+plt.plot(exchange_df_non_election_yrs["Date"], exchange_df_non_election_yrs['CHF=X'], label='USD/CHF', color='blue')
+plt.plot(exchange_df_non_election_yrs["Date"], exchange_df_non_election_yrs['EUR=X'], label='USD/EUR', color='green')
+plt.plot(exchange_df_non_election_yrs["Date"], exchange_df_non_election_yrs['GBP=X'], label='USD/GBP', color='red')
+plt.plot(exchange_df_non_election_yrs["Date"], exchange_df_non_election_yrs['RUB=X'], label='USD/RUB', color='yellow')
+plt.plot(exchange_df_non_election_yrs["Date"], exchange_df_non_election_yrs['JPY=X'], label='USD/JPY', color='purple')
+plt.xlabel("Date")
+plt.ylabel("Exchange Rate")
+plt.title("Historical Exchange Rates for Major Currencies")
+plt.legend()
+plt.grid(True)
+plt.show()
+
+
+
+
+# step 3 performance calculation
+# percent change in exchange rates over the specified period
+exchange_df_non_election_yrs["USD/CHF_Percent_Change"] = exchange_df_non_election_yrs['CHF=X'].pct_change() * 100
+exchange_df_non_election_yrs["USD/EUR_Percent_Change"] = exchange_df_non_election_yrs['EUR=X'].pct_change() * 100
+exchange_df_non_election_yrs["USD/GBP_Percent_Change"] = exchange_df_non_election_yrs['GBP=X'].pct_change() * 100
+exchange_df_non_election_yrs["USD/RUB_Percent_Change"] = exchange_df_non_election_yrs['RUB=X'].pct_change() * 100
+exchange_df_non_election_yrs["USD/JPY_Percent_Change"] = exchange_df_non_election_yrs['JPY=X'].pct_change() * 100
+# print(exchange_df.tail(10))
+
+
+
+
+best_performer = exchange_df_non_election_yrs[["USD/CHF_Percent_Change", "USD/EUR_Percent_Change",
+"USD/GBP_Percent_Change",
+"USD/JPY_Percent_Change",
+"USD/RUB_Percent_Change"]].idxmax(axis=1)
+worst_performer = exchange_df_non_election_yrs[["USD/CHF_Percent_Change", "USD/EUR_Percent_Change",
+"USD/GBP_Percent_Change",
+"USD/JPY_Percent_Change",
+"USD/RUB_Percent_Change"]].idxmax(axis=1)
+
+
+
+
+# comparison
+# compare to USD
+usd_benchmark = exchange_df_non_election_yrs["CHF=X"].pct_change() * 100
+
+
+
+
+# Data visualization - appreciation vs deprecation
+appreciation = (exchange_df_non_election_yrs[["USD/CHF_Percent_Change", "USD/EUR_Percent_Change",
+"USD/GBP_Percent_Change",
+"USD/JPY_Percent_Change",
+"USD/RUB_Percent_Change"]] > 0).sum()
+depreciation = (exchange_df_non_election_yrs[["USD/CHF_Percent_Change", "USD/EUR_Percent_Change",
+"USD/GBP_Percent_Change",
+"USD/JPY_Percent_Change",
+"USD/RUB_Percent_Change"]] < 0).sum()
+
+
+
+
+labels = appreciation.index
+
+
+
+
+plt.figure(figsize=(12,6))
+plt.bar(labels, appreciation, color= "green", label="Appreciation")
+plt.bar(labels, depreciation, color= "red", label="Depreciation", bottom=appreciation)
+plt.xlabel("Currency Pair")
+plt.ylabel("Number of Periods")
+plt.title("Number of Periods with Appreciation and Depreciation")
+plt.legend()
+plt.grid(True)
+plt.show()
+
+
+
+
+#Correlation Analysis
+correlation_matrix = exchange_df_non_election_yrs[["CHF=X", "EUR=X", "GBP=X", "RUB=X", "JPY=X"]].corr()
+#print("Correlation Matrix:")
+#print(correlation_matrix)
+
+
+
+
+plt.figure(figsize=(12,6))
+sns.heatmap(correlation_matrix, annot=True, cmap="coolwarm", fmt=".2f", linewidths=0.5)
+plt.title("Correlation Matrix of Currency Pairs")
+plt.show()
+
+
+correlation_matrix_election = exchange_df_election_yrs[["CHF=X", "EUR=X", "GBP=X", "RUB=X", "JPY=X"]].corr()
+
+
+
+
+# compare with non-election years
+correlation_difference = correlation_matrix.corrwith(correlation_matrix_election)
+print("The difference in correlation coefficients is:\n" + str(correlation_difference))
+
+
+
+
+plt.figure(figsize=(12,6))
+sns.heatmap(correlation_difference.to_frame(), annot=True, cmap="coolwarm", fmt=".2f", linewidths=0.5)
+plt.title("Difference in Correlation Coefficients between Election and Non-Election Years")
+plt.show()
